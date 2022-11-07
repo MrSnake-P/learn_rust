@@ -175,3 +175,149 @@ fn main() {
 已经上传的版本将无法被覆盖，对应的代码也不能被删除。这种行为正是crates.io的一个主要设计目标，它希望能够成为一个永久的代码文档服务器，并保证所有依赖于crates.io的包都能一直被正常构建。
 
 ### 发布已有包的新版本
+
+为了在修改代码后发布新的版本，我们需要修改Cargo.toml 文件中的version字段并重新发布。你应当根据语义化版本规则来基于修改的内容决定下一个合理的版本号，然后执行cargo publish上传新的版本。
+
+### 使用cargo yank命令从cargo.io上移除版本
+
+所有已经产生Cargo.lock 的项目将不会受到撤回操作的影响，而未来所有产生的新Cargo.lock 文件将不会再使用已经撤回的版本。
+
+运行cargo yank时，指定对应版本号即可撤回指定版本：
+
+`$ cargo yank --vers 1.0.1`
+
+添加--undo参数，也可以取消撤回操作
+`$ cargo yank --vers 1.0.1 --undo`
+
+## Cargo工作空间
+
+Cargo提供了一个叫作工作空间 （workspace）的功能，它可以帮助开发者管理多个相互关联且需要协同开发的包。
+
+### 创建工作空间
+
+```
+$ mkdir add
+$ cd add
+
+Cargo.toml
+[workspace]
+
+members = [
+    "adder",
+]
+```
+
+```
+$ cargo new adder
+```
+
+使用cargo build来构建整个工作空间
+
+### 在工作空间中创建第二个包
+
+```rust
+Cargo.toml
+[workspace]
+
+members = [
+    "adder",
+    "add-one",
+]
+
+$ cargo new add-one --lib
+```
+
+如下所示的目录和文件：
+```rust
+├── Cargo.lock
+├── Cargo.toml
+├── add-one
+│   ├── Cargo.toml
+│   └── src
+│       └── lib.rs
+├── adder
+│   ├── Cargo.toml
+│   └── src
+│       └── main.rs
+└── target
+```
+
+#### 指定adder依赖
+```rust
+adder/Cargo.toml
+[dependencies]
+
+add-one = { path = "../add-one" }
+
+adder/src/main.rs
+use add_one;
+
+fn main() {
+    let num = 10;
+    println!("Hello, world! {} plus one is {}!", num, add_one::add_one(num));
+}
+
+$ cargo build
+```
+
+```shell
+调用cargo run时通过-p参数来指定需要运行的包名
+$ cargo run -p adder
+```
+
+#### 在工作空间中依赖外部包
+
+```rust
+add-one/Cargo.toml
+[dependencies]
+
+// 引入依赖
+$ cargo build
+```
+
+在adder包的Cargo.toml 文件中也需要添加rand依赖
+
+#### 为工作空间增加测试
+
+```rust
+add-one/src/lib.rs
+pub fn add_one(x: i32) -> i32 {
+            x + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*
+
+;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(3, add_one(2));
+    }
+}
+```
+
+使用参数-p及指定的包名称来运行某一个特定包的测试：
+
+`$ cargo test -p add-one`
+
+你可以在项目规模逐渐增长时考虑使用工作空间：独立短小的组件要比繁复冗长的代码更容易理解一些。另外，当多个包经常需要同时修改时，将它们放于同一工作空间下也有助于协调同步。
+
+## 使用cargo install从crates.io上安装可执行程序
+
+cargo install命令使我们可以在自己的计算机设备中安装和使用二进制包。
+
+所有通过cargo install命令安装的二进制文件都会被存储在Rust安装根目录下的bin 文件夹中。
+
+`$ cargo install ripgrep`
+
+## 使用自定义命令扩展Cargo的功能
+
+Cargo允许我们添加子命令来扩展它的功能而无须修改Cargo本身。只要你的$PATH路径中存在二进制文件cargo-something，就可以通过运行cargo something来运行该二进制文件，就好像它是Cargo的子命令一样。运行cargo --list可以列出所有与此类似的自定义命令。借助于这一设计，我们可以使用cargo install来安装扩展，并把这些扩展视作内建的Cargo命令来运行。
+
+## 总结
+
+Cargo和crates.io共同构建出的代码分享机制，Rust的生态系统才能够应对许多不同类型的任务。
+
+虽然Rust的标准库小巧且稳定，但是我们依然可以借助包机制来轻松地分享与使用代码，并随着时间不断地演化进步而不必拘泥于语言本身的更新频率。
